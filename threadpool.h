@@ -25,12 +25,12 @@ typedef struct {
     pthread_t *threads;
     ul nthreads;
     job_list *jobs;
-} worker_pool;
+} threadpool;
 
 #define THREADPOOL_NCORES (sysconf(_SC_NPROCESSORS_ONLN))
 
-worker_pool* worker_pool_create (size_t nthreads);
-void worker_pool_destroy (worker_pool *pool);
-void worker_pool_add_job (worker_pool *pool, void (*func)(void*), void* arg);
+threadpool* threadpool_create (size_t nthreads);
+void threadpool_destroy (threadpool *pool);
+void threadpool_add_job (threadpool *pool, void (*func)(void*), void* arg);
 
 #endif

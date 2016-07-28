@@ -9,7 +9,7 @@ static job_list* job_list_create (void);
 static void job_list_destroy (job_list *jobs);
 static int job_list_next_job (job_list *jobs);
 static void job_list_add_job (job_list *jobs, void (*func)(void*), void* arg);
-static void* worker_pool_worker (void* arg);
+static void* threadpool_worker (void* arg);
 
 static job_list* job_list_create (void)
 {
@@ -111,7 +111,7 @@ static void job_list_add_job (job_list *jobs, void (*func)(void*), void* arg)
     pthread_mutex_unlock(jobs->lock);
 }
 
-static void* worker_pool_worker (void* arg)
+static void* threadpool_worker (void* arg)
 {
     job_list *jobs = arg;
     while (1) {
@@ -132,9 +132,9 @@ static void* worker_pool_worker (void* arg)
     }
 }
 
-worker_pool* worker_pool_create (size_t nthreads)
+threadpool* threadpool_create (size_t nthreads)
 {
-    worker_pool *pool = malloc(sizeof(worker_pool));
+    threadpool *pool = malloc(sizeof(threadpool));
     assert(pool != NULL);
 
     pool->nthreads = nthreads;
@@ -144,14 +144,14 @@ worker_pool* worker_pool_create (size_t nthreads)
     pool->jobs = job_list_create();
 
     for (size_t i = 0; i < nthreads; i++) {
-        int err = pthread_create(&pool->threads[i], NULL, worker_pool_worker, pool->jobs);
+        int err = pthread_create(&pool->threads[i], NULL, threadpool_worker, pool->jobs);
         assert(err == 0);
     }
 
     return pool;
 }
 
-void worker_pool_destroy (worker_pool *pool)
+void threadpool_destroy (threadpool *pool)
 {
     pool->jobs->exit_please = 1;
     pthread_cond_broadcast(pool->jobs->wakeup_cond);
@@ -164,7 +164,7 @@ void worker_pool_destroy (worker_pool *pool)
     free(pool);
 }
 
-void worker_pool_add_job (worker_pool *pool, void (*func)(void*), void* arg)
+void threadpool_add_job (threadpool *pool, void (*func)(void*), void* arg)
 {
     job_list_add_job(pool->jobs, func, arg);
 }
