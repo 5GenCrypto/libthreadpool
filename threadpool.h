@@ -5,29 +5,28 @@
 
 typedef unsigned long ul;
 
-typedef struct job_list_node {
+typedef struct job_list {
     void (*func) (void*);
     void* arg;
-    struct job_list_node *next;
-} job_list_node;
-
-typedef struct {
-    job_list_node *first;
-    job_list_node *last;
-    pthread_mutex_t *lock;
-    pthread_mutex_t *wakeup_lock;
-    pthread_cond_t *wakeup_cond;
-    int job_available;
-    int exit_please;
+    struct job_list *next;
 } job_list;
 
 typedef struct {
+    size_t nthreads;
     pthread_t *threads;
-    ul nthreads;
-    job_list *jobs;
+
+    size_t njobs;
+    job_list *first_job;
+    job_list *last_job;
+    pthread_mutex_t *job_list_lock;
+
+    pthread_mutex_t *worker_wakeup_lock;
+    pthread_cond_t  *worker_wakeup_cond;
+
+    int flag_exit_please;
 } threadpool;
 
-#define THREADPOOL_NCORES (sysconf(_SC_NPROCESSORS_ONLN))
+#define NCORES (sysconf(_SC_NPROCESSORS_ONLN))
 
 threadpool* threadpool_create (size_t nthreads);
 void threadpool_destroy (threadpool *pool);
