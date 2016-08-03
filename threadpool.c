@@ -3,7 +3,6 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 
 static void* threadpool_worker (void* arg);
 static int job_available (threadpool *pool);

@@ -2,6 +2,7 @@
 #define __BRENT_THREADPOOL__
 
 #include <pthread.h>
+#include <unistd.h>
 
 #define NCORES (sysconf(_SC_NPROCESSORS_ONLN))
 
