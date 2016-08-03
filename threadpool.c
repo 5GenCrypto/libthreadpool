@@ -1,22 +1,19 @@
 #include "threadpool.h"
 
-#include <stdio.h>
-#include <unistd.h>
 #include <assert.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
-#define THREADPOOL_JOB_GIVEN 0
-#define THREADPOOL_JOB_WAIT  1
-#define THREADPOOL_JOB_EXIT  2
-
-static int job_available (threadpool *pool);
 static void* threadpool_worker (void* arg);
+static int job_available (threadpool *pool);
 
 threadpool* threadpool_create (size_t nthreads)
 {
     threadpool *pool = malloc(sizeof(threadpool));
     assert(pool != NULL);
 
+    pool->num_active_jobs = 0;
     pool->first_job = NULL;
     pool->last_job  = NULL;
 
@@ -48,7 +45,6 @@ threadpool* threadpool_create (size_t nthreads)
 
 void threadpool_destroy (threadpool *pool)
 {
-
     pool->flag_exit_please = 1;
     pthread_cond_broadcast(pool->worker_wakeup_cond);
 
@@ -56,9 +52,10 @@ void threadpool_destroy (threadpool *pool)
         int err = pthread_join(pool->threads[i], NULL);
         assert(err == 0);
     }
+    assert(pool->num_active_jobs == 0); // we should be done with all jobs now
     free(pool->threads);
 
-    assert(pool->first_job == NULL);
+    assert(pool->first_job == NULL); // there should be no jobs left in the queue
     assert(pool->last_job == NULL);
 
     pthread_mutex_destroy(pool->job_list_lock);
@@ -90,9 +87,19 @@ void threadpool_add_job (threadpool *pool, void (*func)(void*), void* arg)
         pool->last_job = new;
         tmp->next      = new;
     }
+    pool->num_active_jobs += 1;
     pthread_mutex_unlock(pool->job_list_lock);
     pthread_cond_signal(pool->worker_wakeup_cond);
 }
+
+void threadpool_wait (threadpool *pool)
+{
+    while (pool->num_active_jobs > 0) {
+        sleep(0.1);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
 
 static void* threadpool_worker (void* arg)
 {
@@ -131,6 +138,11 @@ static void* threadpool_worker (void* arg)
         // do the job
         node->func(node->arg);
         free(node);
+
+        // since we finished, fix the count
+        pthread_mutex_lock(pool->job_list_lock);
+        pool->num_active_jobs -= 1;
+        pthread_mutex_unlock(pool->job_list_lock);
     }
 }
 
@@ -138,4 +150,3 @@ static int job_available (threadpool *pool)
 {
     return pool->first_job != NULL;
 }
-
