@@ -105,12 +105,13 @@ static void* threadpool_worker (void* arg)
 
         // if no job is available, wait
         if (!job_available(pool)) {
-            // pthread_mutex_lock(pool->worker_wakeup_lock);
-            // while (!job_available(pool) || !pool->flag_exit_please) {
-            //     pthread_cond_wait(pool->worker_wakeup_cond, pool->worker_wakeup_lock);
-            // }
-            // pthread_mutex_unlock(pool->worker_wakeup_lock);
-            sleep(0.01);
+            if (pool->flag_exit_please)
+                continue;
+            pthread_mutex_lock(pool->worker_wakeup_lock);
+            while (!job_available(pool) || !pool->flag_exit_please) {
+                pthread_cond_wait(pool->worker_wakeup_cond, pool->worker_wakeup_lock);
+            }
+            pthread_mutex_unlock(pool->worker_wakeup_lock);
             continue;
         }
 
