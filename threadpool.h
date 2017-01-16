@@ -18,9 +18,9 @@ typedef struct {
     size_t num_active_jobs;
     job_list *first_job;
     job_list *last_job;
-    pthread_mutex_t *job_list_lock;
-    pthread_mutex_t *worker_wakeup_lock;
-    pthread_cond_t  *worker_wakeup_cond;
+    pthread_mutex_t job_list_lock;
+    pthread_mutex_t worker_wakeup_lock;
+    pthread_cond_t  worker_wakeup_cond;
     int flag_exit_please;
 } threadpool;
 
