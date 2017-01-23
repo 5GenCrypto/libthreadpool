@@ -3,9 +3,10 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <sys/time.h>
 
 static void* threadpool_worker (void* arg);
-static int job_available (threadpool *pool);
 
 threadpool* threadpool_create (size_t nthreads)
 {
@@ -37,7 +38,7 @@ threadpool* threadpool_create (size_t nthreads)
 void threadpool_destroy (threadpool *pool)
 {
     pool->flag_exit_please = 1;
-    pthread_cond_signal(&pool->worker_wakeup_cond);
+    pthread_cond_broadcast(&pool->worker_wakeup_cond);
 
     for (size_t i = 0; i < pool->nthreads; i++) {
         int err = pthread_join(pool->threads[i], NULL);
@@ -75,7 +76,7 @@ void threadpool_add_job (threadpool *pool, void (*func)(void*), void* arg)
     }
     pthread_mutex_unlock(&pool->job_list_lock);
     __sync_fetch_and_add(&pool->num_active_jobs, 1);
-    pthread_cond_signal(&pool->worker_wakeup_cond);
+    pthread_cond_broadcast(&pool->worker_wakeup_cond);
 }
 
 void threadpool_wait (threadpool *pool)
@@ -89,9 +90,12 @@ void threadpool_wait (threadpool *pool)
 static void* threadpool_worker (void* arg)
 {
     threadpool *pool = arg;
+    struct timeval now;
+    struct timespec t;
+    memset(&t, '\0', sizeof t);
     while (1) {
         pthread_mutex_lock(&pool->job_list_lock);
-        if (job_available(pool)) {
+        if (pool->first_job) {
             job_list *node = pool->first_job;
             pool->first_job = node->next;
             if (pool->first_job == NULL) {
@@ -107,19 +111,17 @@ static void* threadpool_worker (void* arg)
             pthread_mutex_unlock(&pool->job_list_lock);
 
             if (pool->flag_exit_please) {
-                pthread_cond_signal(&pool->worker_wakeup_cond);
+                pthread_cond_broadcast(&pool->worker_wakeup_cond);
                 pthread_exit(NULL);
                 return NULL;
             } else {
                 pthread_mutex_lock(&pool->worker_wakeup_lock);
-                pthread_cond_wait(&pool->worker_wakeup_cond, &pool->worker_wakeup_lock);
+                gettimeofday(&now, NULL);
+                t.tv_sec = now.tv_sec + 1;
+                pthread_cond_timedwait(&pool->worker_wakeup_cond,
+                                       &pool->worker_wakeup_lock, &t);
                 pthread_mutex_unlock(&pool->worker_wakeup_lock);
             }
         }
     }
-}
-
-static int job_available (threadpool *pool)
-{
-    return pool->first_job != NULL;
 }
