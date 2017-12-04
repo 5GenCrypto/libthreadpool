@@ -35,8 +35,7 @@ threadpool* threadpool_create (size_t nthreads)
     assert(pool->threads != NULL);
 
     for (size_t i = 0; i < nthreads; i++) {
-        int err = pthread_create(&pool->threads[i], NULL, threadpool_worker, pool);
-        assert(err == 0);
+        (void) pthread_create(&pool->threads[i], NULL, threadpool_worker, pool);
     }
 
     return pool;
@@ -48,8 +47,7 @@ void threadpool_destroy (threadpool *pool)
     pthread_cond_broadcast(pool->worker_wakeup_cond);
 
     for (size_t i = 0; i < pool->nthreads; i++) {
-        int err = pthread_join(pool->threads[i], NULL);
-        assert(err == 0);
+        (void) pthread_join(pool->threads[i], NULL);
     }
     assert(pool->num_active_jobs == 0); // we should be done with all jobs now
     free(pool->threads);

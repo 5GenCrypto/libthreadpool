@@ -1,0 +1,30 @@
+cmake_minimum_required(VERSION 3.2 FATAL_ERROR)
+project(threadpool VERSION 1.0.0 LANGUAGES C)
+
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif(NOT CMAKE_BUILD_TYPE)
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+
+include(GNUInstallDirs)
+
+set(threadpool_SOURCES
+  threadpool.c
+  )
+set(threadpool_HEADERS
+  threadpool.h
+  )
+
+add_library(threadpool SHARED ${threadpool_SOURCES})
+target_include_directories(threadpool INTERFACE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+  $<INSTALL_INTERFACE:include>)
+
+include(FindOpenMP)
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Wpedantic -Werror -std=gnu11 -march=native ${OpenMP_C_FLAGS}")
+set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -pg -ggdb -O0")
+set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O3")
+target_link_libraries(threadpool INTERFACE "${OpenMP_C_FLAGS}")
+
+install(TARGETS threadpool LIBRARY DESTINATION lib)
+install(FILES ${threadpool_HEADERS} DESTINATION include)
