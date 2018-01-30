@@ -1,11 +1,10 @@
 #include "threadpool.h"
 
 #include <assert.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-
-#define NCORES (sysconf(_SC_NPROCESSORS_ONLN))
 
 typedef struct job_list {
     void (*func)(void *);
@@ -16,13 +15,13 @@ typedef struct job_list {
 struct threadpool {
     size_t nthreads;
     pthread_t *threads;
-    size_t num_active_jobs;
+    atomic_size_t num_active_jobs;
     job_list *first_job;
     job_list *last_job;
     pthread_mutex_t job_list_lock;
     pthread_mutex_t worker_wakeup_lock;
     pthread_cond_t  worker_wakeup_cond;
-    bool flag_exit_please;
+    atomic_bool flag_exit_please;
 };
 
 static void * threadpool_worker(void *arg);
@@ -39,7 +38,7 @@ threadpool_create(size_t nthreads)
     if ((pool->threads = calloc(nthreads, sizeof pool->threads[0])) == NULL)
         goto error;
 
-    pool->num_active_jobs = 0;
+    atomic_init(&pool->num_active_jobs, 0);
     pool->first_job = NULL;
     pool->last_job = NULL;
 
@@ -47,7 +46,7 @@ threadpool_create(size_t nthreads)
     pthread_mutex_init(&pool->worker_wakeup_lock, NULL);
     pthread_cond_init(&pool->worker_wakeup_cond, NULL);
 
-    pool->flag_exit_please = false;
+    atomic_init(&pool->flag_exit_please, false);
     for (size_t i = 0; i < nthreads; i++)
         (void) pthread_create(&pool->threads[i], NULL, threadpool_worker, pool);
     return pool;
@@ -63,18 +62,14 @@ threadpool_destroy(threadpool *pool)
     if (pool == NULL)
         return;
     pthread_mutex_lock(&pool->job_list_lock);
-    pool->flag_exit_please = true;
+    atomic_store(&pool->flag_exit_please, true);
     pthread_mutex_unlock(&pool->job_list_lock);
     pthread_cond_broadcast(&pool->worker_wakeup_cond);
     threadpool_wait(pool);
 
     for (size_t i = 0; i < pool->nthreads; i++)
         (void) pthread_join(pool->threads[i], NULL);
-    assert(pool->num_active_jobs == 0); // we should be done with all jobs now
     free(pool->threads);
-
-    assert(pool->first_job == NULL); // there should be no jobs left in the queue
-    assert(pool->last_job == NULL);
 
     pthread_mutex_destroy(&pool->job_list_lock);
     pthread_mutex_destroy(&pool->worker_wakeup_lock);
@@ -102,7 +97,7 @@ threadpool_add_job(threadpool *pool, void (*func)(void *), void *arg)
             tmp = pool->last_job;
             pool->last_job = tmp->next = new;
         }
-        pool->num_active_jobs++;
+        atomic_fetch_add(&pool->num_active_jobs, 1);
     }
     pthread_mutex_unlock(&pool->job_list_lock);
     pthread_cond_signal(&pool->worker_wakeup_cond);
@@ -112,13 +107,9 @@ threadpool_add_job(threadpool *pool, void (*func)(void *), void *arg)
 void
 threadpool_wait(threadpool *pool)
 {
-    pthread_mutex_lock(&pool->job_list_lock);
-    while (pool->num_active_jobs > 0) {
-        pthread_mutex_unlock(&pool->job_list_lock);
+    while (atomic_load(&pool->num_active_jobs) > 0) {
         pthread_cond_broadcast(&pool->worker_wakeup_cond);
-        pthread_mutex_lock(&pool->job_list_lock);
     }
-    pthread_mutex_unlock(&pool->job_list_lock);
 }
 
 static bool
@@ -145,16 +136,14 @@ threadpool_worker(void *pool_)
             node->func(node->arg);
             free(node);
 
-            pthread_mutex_lock(&pool->job_list_lock);
-            pool->num_active_jobs--;
-            pthread_mutex_unlock(&pool->job_list_lock);
+            atomic_fetch_sub(&pool->num_active_jobs, 1);
         } else {
             pthread_mutex_unlock(&pool->job_list_lock);
-            if (pool->flag_exit_please)
+            if (atomic_load(&pool->flag_exit_please))
                 pthread_exit(NULL);
             pthread_mutex_lock(&pool->worker_wakeup_lock);
             pthread_mutex_lock(&pool->job_list_lock);
-            if (job_available(pool) || pool->flag_exit_please) {
+            if (job_available(pool) || atomic_load(&pool->flag_exit_please)) {
                 pthread_mutex_unlock(&pool->job_list_lock);
             } else {
                 pthread_mutex_unlock(&pool->job_list_lock);
