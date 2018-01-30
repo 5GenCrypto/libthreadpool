@@ -3,3 +3,5 @@ build
 *.cmake
 CMakeCache.txt
 CMakeFiles/
+install_manifest.txt
+libthreadpool.so
