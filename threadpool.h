@@ -1,8 +1,7 @@
 #ifndef __BRENT_THREADPOOL__
 #define __BRENT_THREADPOOL__
 
-#include <pthread.h>
-#include <unistd.h>
+#include <stdlib.h>
 
 #define THREADPOOL_OK    0
 #define THREADPOOL_ERR (-1)
