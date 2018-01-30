@@ -3,17 +3,19 @@ project(threadpool VERSION 1.0.0 LANGUAGES C)
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
-endif(NOT CMAKE_BUILD_TYPE)
+endif()
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+
+if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
+  if(CMAKE_C_COMPILER_VERSION VERSION_LESS "4.9.0")
+    message(FATAL_ERROR "gcc version must be ≥ 4.9.0")
+  endif()
+endif()
 
 include(GNUInstallDirs)
 
-set(threadpool_SOURCES
-  threadpool.c
-  )
-set(threadpool_HEADERS
-  threadpool.h
-  )
+set(threadpool_SOURCES threadpool.c)
+set(threadpool_HEADERS threadpool.h)
 
 add_library(threadpool SHARED ${threadpool_SOURCES})
 target_include_directories(threadpool INTERFACE
