@@ -7,18 +7,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-typedef struct job_list {
+typedef struct job_t {
     void (*func)(void *);
     void *arg;
-    struct job_list *next;
-} job_list;
+    struct job_t *next;
+} job_t;
 
 struct threadpool {
     size_t nthreads;
     pthread_t *threads;
     atomic_size_t num_active_jobs;
-    job_list *first_job;
-    job_list *last_job;
+    job_t *first_job;
+    job_t *last_job;
     pthread_mutex_t job_list_lock;
     pthread_mutex_t worker_wakeup_lock;
     pthread_cond_t  worker_wakeup_cond;
@@ -82,7 +82,7 @@ threadpool_destroy(threadpool *pool)
 int
 threadpool_add_job(threadpool *pool, void (*func)(void *), void *arg)
 {
-    job_list *new, *tmp;
+    job_t *new, *tmp;
 
     if ((new = calloc(1, sizeof new[0])) == NULL)
         return THREADPOOL_ERR;
@@ -127,7 +127,7 @@ threadpool_worker(void *pool_)
     while (1) {
         pthread_mutex_lock(&pool->job_list_lock);
         if (job_available(pool)) {
-            job_list *node;
+            job_t *node;
             node = pool->first_job;
             pool->first_job = node->next;
             if (pool->first_job == NULL)
