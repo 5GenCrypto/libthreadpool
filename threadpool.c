@@ -62,8 +62,11 @@ threadpool_destroy(threadpool *pool)
 {
     if (pool == NULL)
         return;
+    pthread_mutex_lock(&pool->job_list_lock);
     pool->flag_exit_please = true;
+    pthread_mutex_unlock(&pool->job_list_lock);
     pthread_cond_broadcast(&pool->worker_wakeup_cond);
+    threadpool_wait(pool);
 
     for (size_t i = 0; i < pool->nthreads; i++)
         (void) pthread_join(pool->threads[i], NULL);
@@ -109,9 +112,13 @@ threadpool_add_job(threadpool *pool, void (*func)(void *), void *arg)
 void
 threadpool_wait(threadpool *pool)
 {
+    pthread_mutex_lock(&pool->job_list_lock);
     while (pool->num_active_jobs > 0) {
-        sleep(1);
+        pthread_mutex_unlock(&pool->job_list_lock);
+        pthread_cond_broadcast(&pool->worker_wakeup_cond);
+        pthread_mutex_lock(&pool->job_list_lock);
     }
+    pthread_mutex_unlock(&pool->job_list_lock);
 }
 
 static bool
@@ -146,15 +153,12 @@ threadpool_worker(void *pool_)
             if (pool->flag_exit_please)
                 pthread_exit(NULL);
             pthread_mutex_lock(&pool->worker_wakeup_lock);
-            while (1) {
-                pthread_mutex_lock(&pool->job_list_lock);
-                if (job_available(pool) || pool->flag_exit_please) {
-                    pthread_mutex_unlock(&pool->job_list_lock);
-                    break;
-                } else {
-                    pthread_mutex_unlock(&pool->job_list_lock);
-                    pthread_cond_wait(&pool->worker_wakeup_cond, &pool->worker_wakeup_lock);
-                }
+            pthread_mutex_lock(&pool->job_list_lock);
+            if (job_available(pool) || pool->flag_exit_please) {
+                pthread_mutex_unlock(&pool->job_list_lock);
+            } else {
+                pthread_mutex_unlock(&pool->job_list_lock);
+                pthread_cond_wait(&pool->worker_wakeup_cond, &pool->worker_wakeup_lock);
             }
             pthread_mutex_unlock(&pool->worker_wakeup_lock);
         }
