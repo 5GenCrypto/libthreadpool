@@ -122,6 +122,7 @@ job_available(const threadpool *pool)
 static void *
 threadpool_worker(void *pool_)
 {
+    const struct timespec t = { .tv_sec = 0, .tv_nsec = 1000000L };
     threadpool *pool = pool_;
     while (1) {
         pthread_mutex_lock(&pool->job_list_lock);
@@ -142,7 +143,8 @@ threadpool_worker(void *pool_)
             if (atomic_load(&pool->flag_exit_please))
                 pthread_exit(NULL);
             pthread_mutex_lock(&pool->worker_wakeup_lock);
-            pthread_cond_wait(&pool->worker_wakeup_cond, &pool->worker_wakeup_lock);
+            pthread_cond_timedwait(&pool->worker_wakeup_cond,
+                                   &pool->worker_wakeup_lock, &t);
             pthread_mutex_unlock(&pool->worker_wakeup_lock);
         }
     }
